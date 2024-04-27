@@ -1,0 +1,26 @@
+# Uplift Modelling 
+
+## What is Uplift Modelling?
+
+* Uplift Modelling: Estimating **conditional** average treatment effects
+
+* What is a conditional ATE?
+    * Average treatment effect (ATE) for a subset of the population
+
+* Why do we want to know conditional ATEs?
+    * we would like to know for which subjects (patients, users, customers, ...) the treatment works better or worse
+* essential intermediate step to improve the targeting of a treatment of interest
+
+## Conditional Average Treatment Effects
+
+* Fundamental problem of causal inference: cannot recover individual treatment effects:
+    
+    $$
+    \tau_i = Y_i(1) - Y_i(0)
+    $$
+        
+        * We can estimate a conditional average:
+        
+        $\tau(x) = E[\tau_i | X_i = x]$
+            
+            i.e. the average effect of treatment on sales for older customers

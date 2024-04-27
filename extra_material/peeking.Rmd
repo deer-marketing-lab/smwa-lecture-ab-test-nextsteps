@@ -1,0 +1,109 @@
+# Peeking & Early Stopping 
+
+## What's the Problem?
+
+* Implementing an A/B test usually not instantaneous
+
+* Analyst can look at the data before the data collection is completed, one or multiple times
+    * Known as peeking
+
+* Using standard hypothesis testing procedures when peeking can lead to misleading conclusions
+    * Can we adjust our testing procedure to account for peaking?
+
+## Example: XXX 
+
+## Load the Data 
+
+## Peeking
+
+* Suppose we look at the data every 100 observations
+
+* We might be tempted to draw conclusions, given what we observe.
+
+* Suppose our experimentation dashboard shows an estimate of the ATE and 95% confidence interval every time we peek
+
+## Peeking
+
+* After 500 observations we might stop the experiment since the confidence interval no longer includes zero
+
+Is this an OK thing to do?
+
+## Multiple Hypothesis Testing
+
+* Our peeking and deciding approach means we have made **multiple decisions**
+    * And tested **multiple hypotheses**
+
+* What are the consequences of doing this?
+
+## Measuring the consequences
+
+**Coverage**:
+
+**Power**:
+
+**False Discovery Rate**:
+
+**Average Experiment Duration**:
+
+## Consequences of Peeking and Deciding
+
+Plot
+
+## Consequences of Peeking and Deciding
+
+* Coverage seems to be OK. 
+
+* Power is above 80% starting at around 250 observations, 
+
+* The false rejection rate is way higher than the target of 5%
+
+
+## Correcting For Multiple Hypothesis Testing
+
+Let's examine two adjustments that aim to correct for peeking:
+
+1. Bonferonni Correction
+2. Group Sequential Testing
+
+## Bonferonni Correction 
+
+Idea: decrease the significance level α proportionally to the number of looks. 
+
+* In particular, instead of using the same $\alpha$ for each look, use
+
+$$
+\alpha_{B} = \frac{\alpha}{P}
+$$
+
+where P is the number of looks
+
+* Need the number of looks planned in advance!
+
+## Bonferonni Correction
+
+## Group Sequential Testing
+
+* Idea: allow for peeking at any point in time and correct the significance level for the peeking point
+
+* How? define a $\alpha$ spending function that determines how to correct the significance level $\alpha$, given peeking time $t$
+
+$$
+f(\alpha,t) = \alpha \ln(1 + (e - 1)t)
+$$
+
+where $t = n/N$
+
+* As $t \rightarrow 1$, correction converges to the original significance level 
+
+## $\alpha$ spending function
+
+## Group Sequential Testing
+
+## Summary
+
+* Group sequential testing is  a procedure to do valid inference when peeking during an A/B test,
+    * Any number of times, and 
+    * At any point during the experiment. 
+
+Peeking does not come for free.
+ * The more we peek, the earlier we can stop an experiment but also the higher the false rejection rate.

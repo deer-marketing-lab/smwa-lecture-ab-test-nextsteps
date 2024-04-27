@@ -1,0 +1,17 @@
+## CUPED Makes Differences Between Groups Clearer
+
+```{r}
+ggplot(df) +
+    geom_histogram(aes(x = post_spend, fill = as.factor(treatment_status)), alpha = 0.5) + 
+    scale_fill_manual(values=c("#69b3a2", "#404080"))
+    
+#geom_histogram(aes(x = cuped_spend), alpha = 0.2)
+
+```
+
+```{r}
+ggplot(df) +
+    geom_histogram(aes(x = cuped_spend, fill = as.factor(treatment_status)), alpha = 0.5) + 
+    scale_fill_manual(values=c("#69b3a2", "#404080"))
+    
+```
