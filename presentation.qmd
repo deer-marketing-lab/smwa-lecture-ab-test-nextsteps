@@ -1,7 +1,7 @@
 ---
-title: "Presentation"
+title: "A/B Testing: Next Steps"
 author: "Lachlan Deer"
-institute: "Somewhere"
+institute: "Social Media and Web Analytics, 2024"
 format: 
   beamer: 
     aspectratio: 32
@@ -9,34 +9,548 @@ format:
     theme: cousteau
 ---
 
-# In the morning
+```{r}
+library(readr)
+library(dplyr)
+library(infer)
+library(ggplot2)
+library(broom)
+library(estimatr)
+```
 
-## Getting up
+## Learning Goals
 
-- Turn off alarm
-- Get out of bed
+* Explain how CUPED decreases variance of estimates in an A/B Test
+* Implement a CUPED analysis in R
+* Explain why and when one needs to adjust standard errors in A/B Test analysis using linear regression 
+* Implement standard error adjustments in R
+* Define the SUTVA assumption and analyze whether the it is appropriate in a particular setting
+* Explain alternative experiment designs that allow unbiased treatment effect estimation when SUTVA would be violated in a standard test design
 
-## Breakfast
+## Where Are We Now?
 
-- Eat eggs
-- Drink coffee
+So far: 
 
-# In the evening
+* Randomization as a modus operandi to overcome selection effects and omitted variable bias 
+* Design and analysis of "standard" A/B tests
 
-## Dinner
+**This lecture**: Tweaking the standard design
 
-- Eat spaghetti
-- Drink wine
+* Reducing the variance of our estimates
+* Correct inference when treatment allocation is at a coarser level than the data we analyse
+* How to handle violations of a *hidden* assumption
 
-## Going to sleep
+# Variance Reduction with CUPED 
 
-- Get in bed
-- Count sheep
+## What is CUPED?
 
-# Before I Sleep
+**\alert{CUPED}**: **Controlled-Experiment using Pre-Experiment Data** 
 
-## I write equations
+* A technique to increase the power of randomized controlled trials in A/B tests.
+
+How does it work? 
+
+Let's start with some data... 
+
+## Testing the Effectivness of a New Recommender
+
+**Business questions**: Does the new recommender system increase spending?
+
+**Test setting**: Online Website, recommender system
+
+**Unit**: A consumer
+
+**Treatments**: control group, new recommender system
+
+**Reponse**: spending in the next 14 days
+
+**Selection**: all consumers who purchased in last 60 days
+
+**Assignment**: randomly assigned (1/2 each)
+
+**Sample size**: 2,000 consumers
+
+## The Data
+
+```{r, message = FALSE}
+df <- read_csv("data/ad_campaign.csv")
+head(df)
+```
+
+\begin{center}
+\textbf{We also observe consumer behaviour before the test}
+\end{center}
+
+## What We've been Doing So Far
 
 $$
-y = x \beta + \varepsilon
+spend_i = \beta_0 + \beta_1 Treatment_i + \varepsilon_i
 $$
+
+```{r, eval=FALSE, echo =FALSE}
+mod <- lm(post_spend ~ treatment_status, 
+          data = df)
+tidy(mod)
+```
+
+## What can we improve?
+
+Our **\alert{existing estimator is unbiased}** 
+
+* Which means it delivers the correct estimate, on average. 
+
+Potential **improvement**: we could try to **\alertb{decrease its variance}**. 
+
+Decreasing the variance of an estimator is important since it allows us to:
+
+* Detect smaller effects
+* Detect the same effect, but with a smaller sample size
+
+In general, an estimator with a smaller variance allows us to run tests with a higher power, i.e. ability to detect smaller effects.
+
+## CUPED
+
+Suppose you are running an A/B test and $Y$ is the outcome of interest (revenue in our example) 
+
+* The binary variable $T$ indicates whether a single individual has been treated or not 
+
+Suppose you have access to **another variable $X$** at the unit level which is **not affected by the treatment**
+
+* And has known expectation $E[X]$.
+
+**\alertb{Can we use X to reduce the variance of the estimate}** of the average treatment effect?
+
+## CUPED
+
+Define: 
+
+$$
+\hat{Y}^{CUPED} = \bar{Y} - \theta \bar{X} + \theta E[X]
+$$
+
+This is an **unbiased estimator** for E[Y] since last terms cancel out
+
+## CUPED
+
+However the **\alertb{variance of $\hat{Y}^{CUPED}$ is lower}** than $Y$:
+
+$$
+Var(\hat{Y}^{CUPED}) = Var(\bar{Y})(1 - \rho^2)
+$$
+
+where $\rho$ is the correlation between Y and X
+
+$\implies$ higher correlation between Y and X $\rightarrow$ higher variance reduction using CUPED
+
+## Estimating the ATE with CUPED
+
+$$
+\begin{aligned}
+\widehat{ATE}^{CUPED} &= \hat{Y}^{CUPED}(T = 1) - \hat{Y}^{CUPED}(T = 0) \\
+    &= (\bar{Y} - \theta \bar{X} + \theta E[X] | T=1 ) - (\bar{Y} - \theta \bar{X} + \theta E[X] | T=0 ) \\
+    &= (\bar{Y} - \theta \bar{X} | T=1 ) - (\bar{Y} - \theta \bar{X} | T=0 )
+\end{aligned}
+$$
+
+## Optimal Choice of Pre-Experiment Variable (X)
+
+$X$ should have the following properties:
+
+* **Not affected by the treatment**
+* Be as correlated with $Y$ as possible
+
+The authors of the original CUPED paper suggest using **\alertc{pre-treatment outcome}** variables since it gives the most variance reduction in practice.
+
+## Computing CUPED Estimate
+
+1. Estimate $\hat{\theta}$ by regressing Y on X
+2. Compute $\hat{Y}^{CUPED} = \bar{Y} - \hat{\theta} X$
+3. Compute the difference of $\hat{Y}^{CUPED}$ between treatment and control groups
+
+## CUPED in Action: Estimating $\theta$
+
+```{r, eval=FALSE, echo =FALSE}
+theta <- 
+    tidy(lm(post_spend ~ pre_spend, data = df)) %>%
+    filter(term=="pre_spend") %>%
+    select(estimate) %>%
+    purrr::pluck('estimate')
+
+print(theta)
+
+#alternative:
+#cov(df$post_spend, df$pre_spend) / var(df$pre_spend)
+
+```
+
+## CUPED in Action: Computing $\hat{Y}_1^{CUPED}$
+
+```{r, eval=FALSE, echo =FALSE}
+df <- 
+    df %>%
+    mutate(cuped_spend = post_spend - 
+               theta*(pre_spend - mean(df$pre_spend)
+                      )
+           )
+```
+
+## CUPED in Action: Estimate the ATE
+
+```{r, eval=FALSE, echo =FALSE}
+mod_cuped <- lm(cuped_spend ~ treatment_status, 
+                data = df)
+tidy(mod_cuped)
+```
+    
+    
+## An Equivalent Formulation 
+
+1. Regress $Y$ on $X$ and compute the residuals, $\tilde{Y}$ 
+2. Compute $\hat{Y}^{CUPED} = \tilde{Y} + \bar{Y}$
+3. Compute the difference between $\hat{Y}^{CUPED}$ between the treatment and control group
+
+## An Equivalent Formulation
+
+```{r, eval = FALSE, echo = FALSE}
+df <-
+    df %>%
+    mutate(post_spend_tilde = 
+               resid(lm(post_spend ~ pre_spend, 
+                        data =df
+                        )
+                     ) +
+               mean(df$post_spend)
+           )
+
+tidy(lm(post_spend_tilde ~ treatment_status, data = df))
+```
+
+## CUPED Performance
+
+Comparison of CUPED vs "standard" estimate over 5000 simulated datasets from the same DGP
+
+\begin{figure}
+\includegraphics[width=7cm]{figs/comparison_cuped.png}
+\end{figure}
+
+## Summary
+
+* **CUPED aims to decrease the variance of the ATE** by leveraging additional consumer data that is unaffected by the experiment 
+
+* **CUPED transforms the outcome variable**, then we use our **conventional toolkit** to analyse the transformed data
+
+* CUPED decreases variance **by using the additional data to make differences between groups "clearer"**
+
+# Clustered Standard Errors
+
+## A Problem We Need to Solve
+
+Unit of **treatment assignment differs from the unit of observation**
+
+* Example 1: treat all customers in a certain region while observing outcomes at the customer level, 
+* Example 2: treat all articles of a certain brand, while observing outcomes at the article level. 
+
+Usually this happens because of practical constraints with how we can randomize
+
+**Implication**: Treatment effects are "not independent" across observations
+
+* Example 1: Customer in a region is treated, also other customers in the same region will be treated
+* Example 2: If one article of a brand not treated, neither are any of the others
+
+In our **\alert{inference}** we have to **\alert{take this dependence into account}**
+
+## Example: Customer Order Data and Recommenders Redux
+
+**Business questions**: Does showing a carousel of related articles at checkout to incentivize customers to add other articles to their basket?
+
+**Test setting**: Online Website, carousel introduction
+
+**Unit**: A consumer
+
+**Treatments**: control group, adding a carousel after adding an item to cart
+
+**Reponse**: spending in the next 28 days
+
+**Selection**: all consumers who purchased in last 60 days
+
+**Assignment**: Display carousel to **consumers** at random
+
+**Sample size**: 2,000 consumers
+
+## Load the Data 
+
+```{r}
+recommender <- read_csv("data/recommender_clustering.csv")
+
+head(recommender)
+```
+
+**\alert{Question}**: Do we see the same consumers make more than one purchase?
+
+**\alert{Question}**: If so, why might this be a problem?
+
+
+##  Estimate the ATE
+
+```{r, eval=FALSE, echo =FALSE}
+tidy(lm(log(revenue) ~ treatment_status, data = recommender))
+```
+
+**\alert{Question}**: What assumptions have we made about the distribution of the error term when we compute the standard error this way?
+
+## "Default" Standard Errors 
+
+*By default, R assumes **homoskedastic standard errors**:
+$$
+Var(\varepsilon_i | X_i) = \sigma^2
+$$
+and  between any two observations:
+
+$$
+Cov(\varepsilon_i, \varepsilon_j | X_i) = 0
+$$
+
+In our setting: 
+
+* Variance of the error term is the same across consumers
+* Covariance of error term is the same across consumers is zero
+* **Covariance of error term between multiple purchases of the same consumer is zero**
+ 
+## Relaxing Homoskedasticity: Heteroskedasticity 
+
+Let's weaken these assumptions step by step:
+
+* ~~Variance of the error term is the same across consumers~~
+* **\alert{Variance of the error term is different across consumers}**
+* Covariance of error term is the same across consumers is zero
+* Covariance of error term between multiple purchases of the same consumer is zero
+
+$$
+Var(\varepsilon_{i} | X_i) = \sigma_i^2
+$$
+
+Different assumption on $Var(\varepsilon_i | X_i)$ $\implies$ different formula to compute standard error
+
+* We'll skip the math (hurrah!)
+
+## Heteroskedasticity Robust Standard Errors
+\footnotesize
+
+```{r, eval=FALSE, echo =FALSE}
+summary(lm_robust(log(revenue) ~ treatment_status, 
+               data = recommender,
+               se_type = "HC1")
+     )
+```
+
+**\alert{Question}**: Do we see much of a difference in this case?
+
+## Relaxing Homoskedasticity: Clustering
+
+* Let's weaken these assumptions step by step:
+    * ~~Variance of the error term is the same across consumers~~
+    * Variance of the error term is different across consumers
+    * Covariance of error term is the same across consumers is zero
+    * ~~Covariance of error term between multiple purchases of the same consumer is zero~~
+    * **\alert{Covariance of error term between multiple purchases of the same consumer is non-zero}**
+
+For any two observations of the **\alert{same consumer}**, $g$:
+
+$$
+Cov(\varepsilon_{ig}, \varepsilon_{jg} | X_{g}) = \rho_g \sigma_{ig} \sigma_{jg}
+$$
+<!---
+We are still assuming 
+
+* That for observations of different consumers $Cov(\varepsilon_i, \varepsilon_j | X_i) = 0)$
+* And that there is *heteroskedasticity* 
+---> 
+
+Different assumption $\implies$ different standard error!
+
+## Cluster Robust Standard Errors
+\footnotesize
+
+```{r, eval=FALSE, echo =FALSE}
+summary(lm_robust(log(revenue) ~ treatment_status, 
+               data = recommender,
+               cluster = user)
+     )
+```
+
+**\alert{Question}**: Is there a difference now?
+
+## Summary
+
+* If you **assign treatment at a higher level than your unit of observation**, you **need to correct the standard errors** in your analysis
+
+* You should **cluster your standard errors** at the **level at which the treatment was allocated**
+    * In our example: the consumer
+
+* Cluster-robust standard errors are larger than the usual standard errors only if there is dependence across observations. 
+    * If observations are only mildly correlated across clusters, then cluster-robust standard errors will be similar to homoskedastic ones. 
+ 
+# The SUTVA assumption
+
+## SUTVA
+
+So far we have made an (implicit) assumption:
+
+\begin{center}
+\textbf{\alert{"We know what the treatment is"}}
+\end{center}
+
+
+More precisely: 
+
+1. The **potential outcomes** for each unit **do not vary with the treatment assigned to other units** (no interference)
+2. For each unit, there are **no different versions** of each **treatment** level (no hidden variation of treatments)
+
+This is known as the **\alert{Stable Unit Treatment Value}** (SUTVA) assumption
+
+## Why Might SUTVA Fail in Online Experiments?
+
+The Stories team at Instagram tries to understand the effect of a new product feature
+
+* e.g., a new emoji reaction
+
+on user engagement, measured by the time on the app. 
+
+A simple randomization strategy at the user level assigns half of the population into the treatment group and the other half in the control.
+
+**\alert{Question}**: How does SUTVA fail here?
+
+## Why Might SUTVA Fail in Online Experiments?
+
+<!---
+**Answer:**
+
+**Users are connected** on the platform, the control group increases (or decreases) the time spent on the app as their treated friends increase (or decreases) the engagement. 
+--->
+
+<!---
+* The original assignment strategy does not work as expected because of user interference, a clear violation of the SUTVA assumption.
+--->
+
+## Is it a BIG deal?
+
+In short, **yes!**
+
+*  Empirical studies and simulations show that the bias from interference ranges from 1/3 to the same size as the treatment effect
+
+* It may mess with the direction of the treatment, e.g., turns positive effect into negative; vice versa.
+
+## Solutions to SUTVA Violations
+
+Common solutions used in large (tech) companies
+
+1. Coarser Levels of Randomization
+2. Ego-Cluster Randomization 
+3. Switchback designs
+
+We'll briefly talk about each one
+
+## Coarsening the Level of Randomization I 
+
+A ride-sharing company (e.g., Lyft) wants to check if a new matching algorithm improves User Retention. 
+
+**\alert{Question}**: Can we randomly assign riders into the treated/non-treated conditions and compare the group means?
+
+## Coarsening the Level of Randomization II 
+
+
+## Coarsening the Level of Randomization III 
+
+A tradeoff is present:
+
+* Coarser granularity $\rightarrow$ fewer units
+* Larger variance
+* Less statistical power
+
+**Rule of Thumb**: Aggregate data up to the granularity level that each unit won't interact with each other and we will still have a sufficient number of observations.
+
+Real World examples: 
+
+* Ridesharing Marketplaces, [Lyft](https://eng.lyft.com/experimentation-in-a-ridesharing-marketplace-b39db027a66e)
+* [Netflix](https://netflixtechblog.com/quasi-experimentation-at-netflix-566b57d2e362)
+
+
+##  Ego-Cluster Randomization I
+
+LinkedIn wants to know how a new introducing new reactions to posts impact engagement metrics on the platform
+
+**\alert{Question}**: Can they run a standard A/B test? Why or why not?
+
+##  Ego-Cluster Randomization II
+
+
+##  Ego-Cluster Randomization III
+
+**\alertb{Solution}**: Ego-cluster randomization, which treats a focal person ("ego") and her immediate connections ("alter") as a cluster, then randomizes the treatment assignment at the cluster level.
+
+\begin{figure}
+\includegraphics[width=9cm]{figs/ego-cluster.png}
+\end{figure}
+
+## Switchback Designs I
+
+UberEats wants to test out how dynamic pricing (i.e., extra charge for rush hours) would affect customer experience, measured by User Retention.
+
+**\alert{Question}**: Why won't A/B tests at the user level work?
+
+## Switchback Designs II
+
+
+## Switchback Designs III
+
+**\alertb{Solution}:** Chooses a higher level of analysis ...
+
+... and randomize the treatment at distinct geography and time window 
+
+* Is called a Switchback design. 
+* The design toggles the treatment on and off at the distinct geography-time level and checks the changes in the outcome variables
+
+## Switchback designs IV
+
+\begin{figure}
+\includegraphics[width=9cm]{figs/switchback.png}
+\end{figure}
+
+Switchback design assumes dependence within the clusters but independence among clusters.
+
+# Recap
+
+## Summary 
+
+* CUPED decreases the variance of A/B test estimates by leveraging pre-treatment data that is unaffected by the experiment
+
+* Robustifying standard errors at the unit of treatment prevents incorrect statistical inference
+
+* Alternative A/B testing designs offer ways around violations of the SUTVA assumption
+
+
+## Acknowledgements 
+
+I have borrowed and re-mixed material from the following:
+
+* Matteo Courthoud's ["Clustered Standard Errors in A/B Tests"](https://medium.com/towards-data-science/clustered-standard-errors-in-ab-tests-a993f29b9225) and ["Understanding CUPED"](https://medium.com/towards-data-science/understanding-cuped-a822523641af)
+
+* Chi Huang's ["What is SUTVA and What to Do When It’s Violated in Practice"](https://chiandhuang.medium.com/what-is-sutva-and-what-to-do-when-its-violated-in-practice-d42d0dfa3c3d)
+
+## License & Citation
+\small
+Suggested Citation:
+
+```{r, engine='out', echo=TRUE, eval = FALSE}
+@misc{smwa2024_abtest,
+      title={"Social Media and Web Analytics: A/B Tests - Next Steps"},
+      author={Lachlan Deer},
+      year={2024},
+      url = "https://tisem-digital-marketing.github.io/2024-smwa"
+}
+```
+
+This course adheres to the principles of the [\alertb{Open Science Community of Tilburg University}](https://www.tilburguniversity.edu/research/open-science-community). 
+This initiative advocates for transparency and accessibility in research and teaching to all levels of society and thus creating more accountability and impact.
+
+This work is licensed under a [\alertb{Creative Commons Attribution-ShareAlike 4.0 International License}](http://creativecommons.org/licenses/by-sa/4.0/).
