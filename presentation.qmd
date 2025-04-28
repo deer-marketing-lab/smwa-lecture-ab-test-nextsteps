@@ -87,7 +87,7 @@ $$
 spend_i = \beta_0 + \beta_1 Treatment_i + \varepsilon_i
 $$
 
-```{r, eval=FALSE, echo =FALSE}
+```{r, eval=TRUE, echo =TRUE}
 mod <- lm(post_spend ~ treatment_status, 
           data = df)
 tidy(mod)
@@ -169,7 +169,7 @@ The authors of the original CUPED paper suggest using **\alertc{pre-treatment ou
 
 ## CUPED in Action: Estimating $\theta$
 
-```{r, eval=FALSE, echo =FALSE}
+```{r, eval=TRUE, echo =TRUE}
 theta <- 
     tidy(lm(post_spend ~ pre_spend, data = df)) %>%
     filter(term=="pre_spend") %>%
@@ -185,45 +185,22 @@ print(theta)
 
 ## CUPED in Action: Computing $\hat{Y}_1^{CUPED}$
 
-```{r, eval=FALSE, echo =FALSE}
+```{r, eval=TRUE, echo =TRUE}
 df <- 
     df %>%
     mutate(cuped_spend = post_spend - 
-               theta*(pre_spend - mean(df$pre_spend)
-                      )
+               theta*(pre_spend)
            )
 ```
 
 ## CUPED in Action: Estimate the ATE
 
-```{r, eval=FALSE, echo =FALSE}
+```{r, eval=TRUE, echo =TRUE}
 mod_cuped <- lm(cuped_spend ~ treatment_status, 
                 data = df)
 tidy(mod_cuped)
 ```
     
-    
-## An Equivalent Formulation 
-
-1. Regress $Y$ on $X$ and compute the residuals, $\tilde{Y}$ 
-2. Compute $\hat{Y}^{CUPED} = \tilde{Y} + \bar{Y}$
-3. Compute the difference between $\hat{Y}^{CUPED}$ between the treatment and control group
-
-## An Equivalent Formulation
-
-```{r, eval = FALSE, echo = FALSE}
-df <-
-    df %>%
-    mutate(post_spend_tilde = 
-               resid(lm(post_spend ~ pre_spend, 
-                        data =df
-                        )
-                     ) +
-               mean(df$post_spend)
-           )
-
-tidy(lm(post_spend_tilde ~ treatment_status, data = df))
-```
 
 ## CUPED Performance
 
@@ -290,9 +267,9 @@ head(recommender)
 **\alert{Question}**: If so, why might this be a problem?
 
 
-##  Estimate the ATE
+##  Estimate the ATE the 'usual' way
 
-```{r, eval=FALSE, echo =FALSE}
+```{r, eval=TRUE, echo =TRUE}
 tidy(lm(log(revenue) ~ treatment_status, data = recommender))
 ```
 
@@ -300,7 +277,7 @@ tidy(lm(log(revenue) ~ treatment_status, data = recommender))
 
 ## "Default" Standard Errors 
 
-*By default, R assumes **homoskedastic standard errors**:
+* By default, R assumes **homoskedastic standard errors**:
 $$
 Var(\varepsilon_i | X_i) = \sigma^2
 $$
@@ -336,10 +313,10 @@ Different assumption on $Var(\varepsilon_i | X_i)$ $\implies$ different formula 
 ## Heteroskedasticity Robust Standard Errors
 \footnotesize
 
-```{r, eval=FALSE, echo =FALSE}
-summary(lm_robust(log(revenue) ~ treatment_status, 
+```{r, eval=TRUE, echo =TRUE}
+tidy(lm_robust(log(revenue) ~ treatment_status, 
                data = recommender,
-               se_type = "HC1")
+               se_type = "HC1"), conf.int = FALSE
      )
 ```
 
@@ -371,10 +348,10 @@ Different assumption $\implies$ different standard error!
 ## Cluster Robust Standard Errors
 \footnotesize
 
-```{r, eval=FALSE, echo =FALSE}
-summary(lm_robust(log(revenue) ~ treatment_status, 
+```{r, eval=TRUE, echo =TRUE}
+tidy(lm_robust(log(revenue) ~ treatment_status, 
                data = recommender,
-               cluster = user)
+               cluster = user), conf.int = FALSE
      )
 ```
 
@@ -422,15 +399,12 @@ A simple randomization strategy at the user level assigns half of the population
 
 ## Why Might SUTVA Fail in Online Experiments?
 
-<!---
 **Answer:**
 
 **Users are connected** on the platform, the control group increases (or decreases) the time spent on the app as their treated friends increase (or decreases) the engagement. 
---->
 
-<!---
 * The original assignment strategy does not work as expected because of user interference, a clear violation of the SUTVA assumption.
---->
+
 
 ## Is it a BIG deal?
 
@@ -542,11 +516,11 @@ I have borrowed and re-mixed material from the following:
 Suggested Citation:
 
 ```{r, engine='out', echo=TRUE, eval = FALSE}
-@misc{smwa2024_abtest,
+@misc{smwa2025_abtest,
       title={"Social Media and Web Analytics: A/B Tests - Next Steps"},
       author={Lachlan Deer},
-      year={2024},
-      url = "https://tisem-digital-marketing.github.io/2024-smwa"
+      year={2025},
+      url = "https://tisem-digital-marketing.github.io/2025-smwa"
 }
 ```
 
